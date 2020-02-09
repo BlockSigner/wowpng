@@ -21,7 +21,16 @@ def doit(fname, **kwargs):
     #    ["python", "pdf-to-png.py", fname], capture_output=True
     #)
     p = subprocess.run(
-        ["python", "-c", "'import time; time.sleep(5)'"], capture_output=True
+        ["python", "-c",
+         '''
+         """
+         import time
+         tick = time.time()
+         while time.time() - tick < 50:
+             x = 4 / 5.
+         print(tick, time.time())
+         """
+         '''], capture_output=True
     )
     return p.stdout.decode("utf-8")
 
