@@ -17,22 +17,28 @@ options.define("port", default=5000, help="Listen on this port", type=int)
 
 
 def doit(fname, **kwargs):
-    #p = subprocess.run(
+    # p = subprocess.run(
     #    ["python", "pdf-to-png.py", fname], capture_output=True
-    #)
+    # )
     p = subprocess.run(
-        ["python", "-c",
-         '''
-         """
-         import time
-         tick = time.time()
-         while time.time() - tick < 50:
-             x = 4 / 5.
-         print(tick, time.time())
-         """
-         '''], capture_output=True
+        [
+            "python",
+            "-c",
+            """
+import time
+tick = time.time()
+while time.time() - tick < 50:
+  x = 4 / 5.
+print(tick, time.time())
+         """,
+        ],
+        capture_output=True,
     )
-    return p.stdout.decode("utf-8")
+    return {
+        "returncode": p.returncode,
+        "stdout": p.stdout.decode("utf-8"),
+        "stderr": p.stderr.decode("utf-8"),
+    }
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -58,10 +64,7 @@ class BaseHandler(web.RequestHandler):
 class DoIt(BaseHandler):
     def job_id(self):
         return "".join(
-            [
-                random.choice(string.ascii_lowercase + string.digits)
-                for _ in range(5)
-            ]
+            [random.choice(string.ascii_lowercase + string.digits) for _ in range(5)]
         )
 
     async def post(self):
@@ -75,21 +78,23 @@ class DoIt(BaseHandler):
 
     async def get(self, job_id):
         """Status of a 'do it' job"""
-        if job_id in self.jobs:
+        if job_id in self.jobs and self.jobs[job_id].done():
             result = self.jobs[job_id]
-            if result.done():
-                output = result.result()
-                self.write(
-                    {
-                        "status": "ok",
-                        "id": job_id,
-                        "job": "ready",
-                        "output": output,
-                    }
-                )
-                return
+            output = result.result()
 
-        self.write({"status": "ok", "id": job_id, "job": "busy"})
+            # something went wrong
+            if output["returncode"]:
+                self.write(
+                    {"status": "ok", "id": job_id, "job": "failed", "output": output}
+                )
+
+            else:
+                self.write(
+                    {"status": "ok", "id": job_id, "job": "ready", "output": output}
+                )
+
+        else:
+            self.write({"status": "ok", "id": job_id, "job": "busy"})
 
 
 class PingHandler(BaseHandler):
