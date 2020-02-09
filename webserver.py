@@ -1,11 +1,14 @@
 import datetime
 import json
 import logging
+import os
 import random
 import string
 import subprocess
+import time
 
 from concurrent.futures import ThreadPoolExecutor
+from tempfile import TemporaryDirectory
 
 import tornado
 from tornado import log
@@ -16,11 +19,9 @@ from tornado import web
 options.define("port", default=5000, help="Listen on this port", type=int)
 
 
-def doit(fname, **kwargs):
-    # p = subprocess.run(
-    #    ["python", "pdf-to-png.py", fname], capture_output=True
-    # )
-    p = subprocess.run(
+def pdf_to_png(fname, **kwargs):
+    p = subprocess.run(["python", "pdf-to-png.py", fname], capture_output=True)
+    '''p = subprocess.run(
         [
             "python",
             "-c",
@@ -33,7 +34,7 @@ print(tick, time.time())
          """,
         ],
         capture_output=True,
-    )
+    )'''
     return {
         "returncode": p.returncode,
         "stdout": p.stdout.decode("utf-8"),
@@ -60,29 +61,43 @@ class BaseHandler(web.RequestHandler):
     def jobs(self):
         return self.settings["jobs"]
 
+    @property
+    def work_dir(self):
+        return self.settings["work_dir"]
 
-class DoIt(BaseHandler):
+
+class ConversionHandler(BaseHandler):
     def job_id(self):
         return "".join(
             [random.choice(string.ascii_lowercase + string.digits) for _ in range(5)]
         )
 
     async def post(self):
-        """Submit a new 'do it' job"""
+        """Submit a new conversion job"""
         job = self.job_id()
 
         self.write({"status": "ok", "id": job})
 
-        result = self.settings["pool"].submit(doit, 2)
-        self.jobs[job] = result
+        pdf = self.request.files["pdf"][0]
+        log.app_log.info("uploaded file %s %s", pdf["filename"], pdf["content_type"])
+
+        job_dir = os.path.join(self.work_dir, job)
+        fname = os.path.join(job_dir, "document.pdf")
+
+        os.makedirs(job_dir)
+        with open(fname, "wb") as f:
+            f.write(pdf["body"])
+
+        result = self.settings["pool"].submit(pdf_to_png, fname)
+        self.jobs[job] = {"start": time.time(), "task": result}
 
     async def get(self, job_id):
-        """Status of a 'do it' job"""
-        if job_id in self.jobs and self.jobs[job_id].done():
-            result = self.jobs[job_id]
+        """Get the status of a conversion job"""
+        if job_id in self.jobs and self.jobs[job_id]["task"].done():
+            result = self.jobs[job_id]["task"]
             output = result.result()
 
-            # something went wrong
+            # something went wrong, send stdout and stderr
             if output["returncode"]:
                 self.write(
                     {"status": "ok", "id": job_id, "job": "failed", "output": output}
@@ -90,7 +105,12 @@ class DoIt(BaseHandler):
 
             else:
                 self.write(
-                    {"status": "ok", "id": job_id, "job": "ready", "output": output}
+                    {
+                        "status": "ok",
+                        "id": job_id,
+                        "job": "ready",
+                        "output": json.loads(output["stdout"]),
+                    }
                 )
 
         else:
@@ -109,18 +129,22 @@ class DatetimeHandler(BaseHandler):
 
 
 class Application(web.Application):
-    def __init__(self,):
+    def __init__(self):
+
+        work_dir = TemporaryDirectory()
+        log.app_log.info("Using '%s' as working direcctory.", work_dir.name)
 
         handlers = [
             (r"/", PingHandler),
-            (r"/doit/([^/]+)", DoIt),
-            (r"/doit/?", DoIt),
+            (r"/convert/([^/]+)", ConversionHandler),
+            (r"/convert/?", ConversionHandler),
             (r"/datetime", DatetimeHandler),
+            (r"/documents/(.*)", web.StaticFileHandler, {"path": work_dir.name}),
         ]
 
         pool = ThreadPoolExecutor(2)
 
-        settings = dict(pdfs={}, jobs={}, pool=pool)
+        settings = dict(pdfs={}, jobs={}, pool=pool, work_dir=work_dir.name)
         super(Application, self).__init__(handlers, **settings)
 
 
