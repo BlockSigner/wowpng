@@ -7,6 +7,7 @@ import string
 import subprocess
 import time
 
+from subprocess import PIPE
 from concurrent.futures import ThreadPoolExecutor
 from tempfile import TemporaryDirectory
 
@@ -20,7 +21,7 @@ options.define("port", default=5000, help="Listen on this port", type=int)
 
 
 def pdf_to_png(fname, **kwargs):
-    p = subprocess.run(["python", "pdf-to-png.py", fname], capture_output=True)
+    p = subprocess.run(["python", "pdf-to-png.py", fname], stdout=PIPE, stderr=PIPE) 
     '''p = subprocess.run(
         [
             "python",
