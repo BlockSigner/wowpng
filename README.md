@@ -2,6 +2,8 @@
 
 A simple webservice to convert PDFs into high-quality PNGs.
 
+> This is an experiment and not production ready. Use it as inspiration and for learning.
+
 The API is simple, use your favourite tool to interact with it.
 Here we demonstrate it with `curl`.
 
