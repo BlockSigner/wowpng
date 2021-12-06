@@ -2,18 +2,12 @@ import ctypes
 import json
 import os
 import sys
-
 from PIL import Image
+import pypdfium2 as PDFIUM
 
-import pdfium as PDFIUM
-
-# import PDFIUMv8 as PDFIUM
-
-
-PDFIUM.FPDF_InitLibraryWithConfig(PDFIUM.FPDF_LIBRARY_CONFIG(2, None, None, 0))
 
 scale = 2
-flags = 0x01 | 0x02
+flags = PDFIUM.FPDF_ANNOT | PDFIUM.FPDF_LCD_TEXT
 
 fname = sys.argv[1]
 
