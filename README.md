@@ -53,9 +53,6 @@ Deploy it your favourite way: auto-deploy via GitHub integration or manually
 with a remote like `ssh://git@heroku.com/wowpng.git` called `heroku` and then
 running `git push heroku master:master`
 
-You can not use a more modern version of Python in `runtime.txt` until
-https://github.com/davidjamesca/ctypesgen/issues/77 is resolved.
-
 
 ### Local development
 
